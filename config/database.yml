@@ -1,0 +1,6 @@
+production:
+  adapter: postgresql
+  host: postgres
+  prepared_statements: false
+  username: canvas
+  database: canvas_production

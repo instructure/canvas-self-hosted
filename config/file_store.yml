@@ -1,0 +1,3 @@
+production:
+  storage: local
+  path_prefix: tmp/files

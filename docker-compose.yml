@@ -1,0 +1,71 @@
+# This setup is generally inspired by the sentry self-hosted repository
+x-healthcheck-defaults: &healthcheck_defaults
+  # Avoid setting the interval too small, as docker uses much more CPU than one would expect.
+  # Related issues:
+  # https://github.com/moby/moby/issues/39102
+  # https://github.com/moby/moby/issues/39388
+  # https://github.com/getsentry/self-hosted/issues/1000
+  interval: "$HEALTHCHECK_INTERVAL"
+  timeout: "$HEALTHCHECK_TIMEOUT"
+  retries: $HEALTHCHECK_RETRIES
+  start_period: 10s
+
+x-canvas-defaults: &canvas_defaults
+  restart: unless-stopped
+  image: canvas-local:latest
+  volumes:
+    - ./config/environments/production-local.rb:/usr/src/app/config/environments/production-local.rb
+    - ./config/cache_store.yml:/usr/src/app/config/cache_store.yml
+    - ./config/database.yml:/usr/src/app/config/database.yml
+    - ./config/delayed_jobs.yml:/usr/src/app/config/delayed_jobs.yml
+    - ./config/file_store.yml:/usr/src/app/config/file_store.yml
+    - ./config/redis.yml:/usr/src/app/config/redis.yml
+    - ./config/security.yml:/usr/src/app/config/security.yml
+    - canvas-brandable_css:/usr/src/app/public/dist/brandable_css
+    - canvas-files:/usr/src/app/tmp/files
+    - canvas-log:/usr/src/app/log
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  env_file: .env.canvas
+
+services:
+  web:
+    <<: *canvas_defaults
+    build:
+      context: canvas-lms
+      dockerfile: Dockerfile.production
+    ports:
+      - "$CANVAS_BIND:80/tcp"
+  job:
+    <<: *canvas_defaults
+    command: bundle exec script/delayed_job run
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    healthcheck:
+      <<: *healthcheck_defaults
+      test: ["CMD-SHELL", "pg_isready -U canvas"]
+    environment:
+      POSTGRES_USER: canvas
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - "canvas-postgres:/var/lib/postgresql/data"
+  redis:
+    image: redis:6.2
+    restart: unless-stopped
+    healthcheck:
+      <<: *healthcheck_defaults
+      test: redis-cli ping
+
+volumes:
+  canvas-brandable_css:
+    external: true
+  canvas-files:
+    external: true
+  canvas-postgres:
+    external: true
+  canvas-log:

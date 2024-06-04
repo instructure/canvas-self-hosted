@@ -1,0 +1,2 @@
+production:
+  encryption_key: <%= ENV.fetch("ENCRYPTION_KEY") %>
